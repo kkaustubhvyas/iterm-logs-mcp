@@ -1,4 +1,4 @@
-"""AppleScript wrappers for reading iTerm2 window/tab/session state."""
+"""AppleScript wrappers for reading iTerm2 window/tab/session state and sending input."""
 
 import subprocess
 
@@ -38,24 +38,35 @@ tell application "iTerm2"
 end tell
 """
 
-_GET_CONTENTS_SCRIPT = """
-on run argv
-    set targetId to item 1 of argv
+_FIND_SESSION_HANDLER = """
+on findSession(targetId)
     tell application "iTerm2"
-        set targetSession to missing value
         repeat with w in windows
             repeat with t in tabs of w
                 repeat with s in sessions of t
-                    if (id of s) is targetId then
-                        set targetSession to s
-                    end if
+                    if (id of s) is targetId then return s
                 end repeat
             end repeat
         end repeat
-        if targetSession is missing value then
-            error "No iTerm2 session found with id " & targetId
-        end if
-        return contents of targetSession
+    end tell
+    error "No iTerm2 session found with id " & targetId
+end findSession
+"""
+
+_GET_CONTENTS_SCRIPT = _FIND_SESSION_HANDLER + """
+on run argv
+    set targetSession to findSession(item 1 of argv)
+    tell application "iTerm2" to return contents of targetSession
+end run
+"""
+
+_WRITE_TEXT_SCRIPT = _FIND_SESSION_HANDLER + """
+on run argv
+    set targetSession to findSession(item 1 of argv)
+    set textToSend to item 2 of argv
+    set pressEnter to (item 3 of argv) is "1"
+    tell application "iTerm2"
+        tell targetSession to write text textToSend newline pressEnter
     end tell
 end run
 """
@@ -105,3 +116,9 @@ def get_session_contents(session_id: str, max_lines: int = 500) -> str:
         return text
     lines = text.splitlines()
     return "\n".join(lines[-max_lines:])
+
+
+def send_text(session_id: str, text: str, press_enter: bool = True) -> None:
+    # Passed via argv rather than interpolated, so quotes/backslashes in the
+    # command can't break out of the AppleScript string.
+    _run_osascript(_WRITE_TEXT_SCRIPT, [session_id, text, "1" if press_enter else "0"])

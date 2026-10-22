@@ -21,5 +21,14 @@ def get_iterm_tab_logs(session_id: str, max_lines: int = 500) -> str:
     return iterm.get_session_contents(session_id, max_lines)
 
 
+@mcp.tool()
+def send_iterm_command(session_id: str, command: str, press_enter: bool = True) -> str:
+    """Type text into one iTerm2 session, identified by the session_id returned
+    from list_iterm_tabs, and press Enter unless press_enter is false. Returns
+    immediately — read the output afterwards with get_iterm_tab_logs."""
+    iterm.send_text(session_id, command, press_enter)
+    return f"Sent to session {session_id}"
+
+
 if __name__ == "__main__":
     mcp.run()

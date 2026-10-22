@@ -12,6 +12,10 @@ macOS + iTerm2 only. Local stdio server — not deployed anywhere.
   `tab_index`, `name`, `tty`, `cwd`, `job`.
 - `get_iterm_tab_logs(session_id, max_lines=500)` — returns the last `max_lines` lines of
   scrollback for that session.
+- `send_iterm_command(session_id, command, press_enter=True)` — types `command` into that
+  session and presses Enter (unless `press_enter=False`). Doesn't wait for output; follow up
+  with `get_iterm_tab_logs`. This runs arbitrary commands in your real terminals — keep the
+  tool on "ask" in your MCP client rather than auto-approving it.
 
 ## First run
 
