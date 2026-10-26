@@ -1,5 +1,6 @@
 """AppleScript wrappers for reading iTerm2 window/tab/session state and sending input."""
 
+import shlex
 import subprocess
 
 RECORD_SEP = "\x1e"
@@ -71,6 +72,13 @@ on run argv
 end run
 """
 
+_CREATE_WINDOW_SCRIPT = """
+tell application "iTerm2"
+    set newWindow to (create window with default profile)
+    return id of (current session of newWindow)
+end tell
+"""
+
 
 def _run_osascript(script: str, args: list[str] | None = None) -> str:
     result = subprocess.run(
@@ -122,3 +130,10 @@ def send_text(session_id: str, text: str, press_enter: bool = True) -> None:
     # Passed via argv rather than interpolated, so quotes/backslashes in the
     # command can't break out of the AppleScript string.
     _run_osascript(_WRITE_TEXT_SCRIPT, [session_id, text, "1" if press_enter else "0"])
+
+
+def create_window(cwd: str | None = None) -> str:
+    session_id = _run_osascript(_CREATE_WINDOW_SCRIPT).strip()
+    if cwd:
+        send_text(session_id, f"cd {shlex.quote(cwd)}")
+    return session_id

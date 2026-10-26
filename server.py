@@ -30,5 +30,13 @@ def send_iterm_command(session_id: str, command: str, press_enter: bool = True) 
     return f"Sent to session {session_id}"
 
 
+@mcp.tool()
+def open_iterm_window(cwd: str | None = None) -> str:
+    """Open a new iTerm2 window with the default profile and return the
+    session_id of its shell. If cwd is given, cd into it first. Use the
+    returned session_id with send_iterm_command / get_iterm_tab_logs."""
+    return iterm.create_window(cwd)
+
+
 if __name__ == "__main__":
     mcp.run()

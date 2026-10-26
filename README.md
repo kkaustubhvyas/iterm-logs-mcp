@@ -16,6 +16,8 @@ macOS + iTerm2 only. Local stdio server — not deployed anywhere.
   session and presses Enter (unless `press_enter=False`). Doesn't wait for output; follow up
   with `get_iterm_tab_logs`. This runs arbitrary commands in your real terminals — keep the
   tool on "ask" in your MCP client rather than auto-approving it.
+- `open_iterm_window(cwd=None)` — opens a new iTerm2 window with the default profile and
+  returns its `session_id`. If `cwd` is given, `cd`s into it first.
 
 ## First run
 
