@@ -38,5 +38,25 @@ def open_iterm_window(cwd: str | None = None) -> str:
     return iterm.create_window(cwd)
 
 
+
+@mcp.tool()
+def stop_iterm_process(session_id: str, timeout: float = 5.0, force: bool = False) -> dict:
+    """Stop whatever is running in the foreground of one iTerm2 session by
+    sending Ctrl-C, then wait up to timeout seconds for the tab to return to
+    its shell. If it is still running and force is true, send SIGTERM to the
+    remaining foreground processes and wait again. Returns stopped (bool),
+    method used, and any processes still running."""
+    return iterm.stop_process(session_id, timeout, force)
+
+
+@mcp.tool()
+def close_iterm_window(session_id: str, force: bool = False) -> dict:
+    """Close the iTerm2 window that contains session_id, including all of its
+    tabs. Refuses (closed=false, with the busy sessions listed) if any tab in
+    the window is still running a process, unless force is true — stop them
+    first with stop_iterm_process."""
+    return iterm.close_window(session_id, force)
+
+
 if __name__ == "__main__":
     mcp.run()

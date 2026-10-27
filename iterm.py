@@ -1,7 +1,10 @@
 """AppleScript wrappers for reading iTerm2 window/tab/session state and sending input."""
 
+import os
 import shlex
+import signal
 import subprocess
+import time
 
 RECORD_SEP = "\x1e"
 FIELD_SEP = "\x1f"
@@ -72,6 +75,25 @@ on run argv
 end run
 """
 
+_CLOSE_WINDOW_SCRIPT = """
+on run argv
+    set targetId to item 1 of argv
+    tell application "iTerm2"
+        repeat with w in windows
+            repeat with t in tabs of w
+                repeat with s in sessions of t
+                    if (id of s) is targetId then
+                        close w
+                        return
+                    end if
+                end repeat
+            end repeat
+        end repeat
+    end tell
+    error "No iTerm2 session found with id " & targetId
+end run
+"""
+
 _CREATE_WINDOW_SCRIPT = """
 tell application "iTerm2"
     set newWindow to (create window with default profile)
@@ -137,3 +159,84 @@ def create_window(cwd: str | None = None) -> str:
     if cwd:
         send_text(session_id, f"cd {shlex.quote(cwd)}")
     return session_id
+
+
+def _find_session(session_id: str) -> dict:
+    for session in list_sessions():
+        if session["session_id"] == session_id:
+            return session
+    raise RuntimeError(f"No iTerm2 session found with id {session_id}")
+
+
+def running_processes(tty: str) -> list[dict]:
+    """Foreground processes on tty other than the session's shell.
+
+    A '+' in ps stat marks the foreground process group. The shell is the
+    process started from outside the tty, either directly by iTerm2 or via the
+    `login` session leader ('s' in stat). An idle tab has only the shell in the
+    foreground, so anything else means a command is still running. More
+    reliable than iTerm2's jobName, which can report the shell while a child
+    is running.
+    """
+    result = subprocess.run(
+        ["ps", "-t", tty.removeprefix("/dev/"), "-o", "pid=,ppid=,stat=,command="],
+        capture_output=True,
+        text=True,
+    )
+    rows = []
+    for line in result.stdout.splitlines():
+        parts = line.split(None, 3)
+        if len(parts) == 4:
+            pid, ppid, stat, command = parts
+            rows.append((int(pid), int(ppid), stat, command))
+    on_tty = {pid for pid, _, _, _ in rows}
+    leaders = {pid for pid, _, stat, _ in rows if "s" in stat}
+    return [
+        {"pid": pid, "command": command}
+        for pid, ppid, stat, command in rows
+        if "+" in stat and ppid in on_tty and ppid not in leaders
+    ]
+
+
+def _wait_until_idle(tty: str, timeout: float) -> list[dict]:
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining = running_processes(tty)
+        if not remaining or time.monotonic() >= deadline:
+            return remaining
+        time.sleep(0.25)
+
+
+def stop_process(session_id: str, timeout: float = 5.0, force: bool = False) -> dict:
+    tty = _find_session(session_id)["tty"]
+    if not running_processes(tty):
+        return {"stopped": True, "method": "none", "remaining": []}
+    send_text(session_id, "\x03", press_enter=False)
+    remaining = _wait_until_idle(tty, timeout)
+    if not remaining:
+        return {"stopped": True, "method": "ctrl-c", "remaining": []}
+    if not force:
+        return {"stopped": False, "method": "ctrl-c", "remaining": remaining}
+    for process in remaining:
+        try:
+            os.kill(process["pid"], signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    remaining = _wait_until_idle(tty, timeout)
+    return {"stopped": not remaining, "method": "sigterm", "remaining": remaining}
+
+
+def close_window(session_id: str, force: bool = False) -> dict:
+    target = _find_session(session_id)
+    window_sessions = [
+        s for s in list_sessions() if s["window_index"] == target["window_index"]
+    ]
+    busy = {
+        s["session_id"]: procs
+        for s in window_sessions
+        if (procs := running_processes(s["tty"]))
+    }
+    if busy and not force:
+        return {"closed": False, "sessions": len(window_sessions), "busy": busy}
+    _run_osascript(_CLOSE_WINDOW_SCRIPT, [session_id])
+    return {"closed": True, "sessions": len(window_sessions), "busy": busy}

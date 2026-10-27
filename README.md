@@ -18,6 +18,14 @@ macOS + iTerm2 only. Local stdio server — not deployed anywhere.
   tool on "ask" in your MCP client rather than auto-approving it.
 - `open_iterm_window(cwd=None)` — opens a new iTerm2 window with the default profile and
   returns its `session_id`. If `cwd` is given, `cd`s into it first.
+- `stop_iterm_process(session_id, timeout=5.0, force=False)` — sends Ctrl-C to that session and
+  waits up to `timeout` seconds for it to return to its shell. With `force=True`, anything still
+  running afterwards gets SIGTERM. Returns `stopped`, the `method` used, and any `remaining`
+  processes. Running state comes from the tty's foreground process group (`ps`), not iTerm2's
+  `jobName`, which can read `zsh` while a child is still running.
+- `close_iterm_window(session_id, force=False)` — closes the whole window containing that
+  session, all tabs included. Refuses and lists the busy sessions if any tab is still running
+  something, unless `force=True`.
 
 ## First run
 
